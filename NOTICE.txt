@@ -1,0 +1,10 @@
+Xtreme Sounds VCV Rack Plugin Collection
+Copyright (c) 2026 Chris DuPont / Xtreme Sounds.
+
+This repository and the S8 and Fire Host source code included in this combined
+plugin distribution are licensed under GNU GPL v3 or later. See LICENSE.txt.
+
+The Xtreme Sounds plugin is independently developed for VCV Rack and is not
+affiliated with or endorsed by VCV, Akai Professional, or Image-Line.
+VCV Rack, Akai, Fire, FL Studio, and other names/trademarks belong to their
+respective owners.

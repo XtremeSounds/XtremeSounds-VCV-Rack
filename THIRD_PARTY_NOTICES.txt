@@ -1,0 +1,10 @@
+THIRD-PARTY / PROTOCOL NOTICE
+
+Fire Host controller behavior was informed by publicly available Akai Fire
+controller documentation, protocol research, and open-source controller
+implementations including DrivenByMoss. Fire Host is a separate VCV Rack
+implementation and does not require DrivenByMoss at runtime.
+
+The combined Xtreme Sounds plugin is distributed under GPL-3.0-or-later.
+VCV Rack itself and any system resources loaded from Rack remain subject to
+their respective licenses.
