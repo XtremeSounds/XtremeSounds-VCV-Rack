@@ -1,0 +1,127 @@
+name: Build Xtreme Sounds VCV Rack Plugin
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-vcv-rack-windows:
+    name: VCV Rack 2 / Windows x64
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install MSYS2 build tools
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            make
+            zip
+            unzip
+            wget
+            jq
+            zstd
+            mingw-w64-x86_64-gcc
+
+      - name: Preflight repository
+        run: |
+          set -euo pipefail
+
+          for required in Makefile plugin.json README.md LICENSE.txt NOTICE.txt CHANGELOG.md src/plugin.cpp src/plugin.hpp src/S8.cpp src/FireHost.cpp res/S8/S8.svg res/FireHost/FireHost-panel-light.png; do
+            if [ ! -f "$required" ]; then
+              echo "ERROR: missing required file: $required"
+              find . -maxdepth 4 -type f -print
+              exit 1
+            fi
+          done
+
+          jq empty plugin.json
+          SLUG="$(jq -r '.slug // empty' plugin.json)"
+          NAME="$(jq -r '.name // empty' plugin.json)"
+          VERSION="$(jq -r '.version // empty' plugin.json)"
+          BRAND="$(jq -r '.brand // empty' plugin.json)"
+          AUTHOR="$(jq -r '.author // empty' plugin.json)"
+          MODULES="$(jq -r '.modules | map(.slug) | join(" ")' plugin.json)"
+
+          printf 'plugin.json: slug=<%s> name=<%s> version=<%s> modules=<%s> brand=<%s> author=<%s>\n' "$SLUG" "$NAME" "$VERSION" "$MODULES" "$BRAND" "$AUTHOR"
+
+          test "$SLUG" = "XtremeSounds"
+          test "$NAME" = "Xtreme Sounds"
+          test "$BRAND" = "Xtreme Sounds"
+          test "$AUTHOR" = "Chris DuPont"
+          test "$MODULES" = "S8 FireHost"
+          printf '%s' "$VERSION" | grep -Eq '^2\.[0-9]+\.[0-9]+$'
+
+          grep -q 'extern Model\* modelS8' src/plugin.hpp
+          grep -q 'extern Model\* modelFireHost' src/plugin.hpp
+          grep -q 'p->addModel(modelS8)' src/plugin.cpp
+          grep -q 'p->addModel(modelFireHost)' src/plugin.cpp
+          grep -q 'createModel<S8, S8Widget>("S8")' src/S8.cpp
+          grep -q 'createModel<FireHost, FireHostWidget>("FireHost")' src/FireHost.cpp
+
+          echo "Preflight OK"
+
+      - name: Remove stale build output
+        run: |
+          set -euo pipefail
+          rm -rf build dist RackSDK Rack-SDK rack-sdk.zip plugin.dll build.log
+
+      - name: Download Rack 2.6.6 Windows SDK
+        run: |
+          set -euo pipefail
+          wget -q https://vcvrack.com/downloads/Rack-SDK-2.6.6-win-x64.zip -O rack-sdk.zip
+          test -s rack-sdk.zip || { echo "ERROR: Rack SDK download failed"; exit 1; }
+          unzip -q rack-sdk.zip
+          if [ -d Rack-SDK ]; then
+            mv Rack-SDK RackSDK
+          fi
+          test -f RackSDK/plugin.mk || { echo "ERROR: RackSDK/plugin.mk not found"; find . -maxdepth 2 -type f -print; exit 1; }
+
+      - name: Build Xtreme Sounds VCV Rack plugin
+        run: |
+          set -euo pipefail
+          export RACK_DIR="$PWD/RackSDK"
+          {
+            make clean
+            make -j2
+            make dist
+          } 2>&1 | tee build.log
+
+      - name: Validate VCV Rack package
+        run: |
+          set -euo pipefail
+          VERSION="$(jq -r '.version' plugin.json)"
+          mapfile -t FILES < <(find dist -maxdepth 1 -type f -name '*.vcvplugin')
+          if [ "${#FILES[@]}" -ne 1 ]; then
+            echo "ERROR: expected exactly one .vcvplugin, found ${#FILES[@]}"
+            find dist -maxdepth 2 -type f -print || true
+            exit 1
+          fi
+          test -s "${FILES[0]}" || { echo "ERROR: generated .vcvplugin is empty"; exit 1; }
+          echo "Built XtremeSounds $VERSION: ${FILES[0]}"
+          echo "PLUGIN_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Upload Xtreme Sounds VCV Rack plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: XtremeSounds-${{ env.PLUGIN_VERSION }}-VCV-Rack-Windows-x64
+          path: dist/*.vcvplugin
+          if-no-files-found: error
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: XtremeSounds-build-log
+          path: build.log
+          if-no-files-found: ignore
